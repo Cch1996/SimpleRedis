@@ -1,0 +1,80 @@
+use std::str::FromStr;
+use super::syn;
+
+grammar;
+
+pub Command: syn::Command<'input> = {
+    <s:cmd> => s,
+}
+
+cmd: syn::Command<'input> = {
+    <s:GetCommand> => syn::Command::GetCommand(s),
+    <s:SetCommand> => syn::Command::SetCommand(s),
+    // EMPTY
+    => syn::Command::Empty
+}
+
+GetCommand: syn::GetCommand<'input> = {
+    GET <k:key_name> => syn::GetCommand {
+        key: k,
+    }
+}
+
+SetCommand: syn::SetCommand<'input> = {
+    SET <k:key_name> <v:var_value> => syn::SetCommand {
+        key: k,
+        value: v
+    }
+}
+
+key_name: syn::StrVal<'input> = {
+    <s:Sconst> => s
+}
+
+var_value: syn::Value<'input> = {
+    <v:opt_boolean_or_string> => syn::Value::Str(v),
+    <v:NumericOnly> => syn::Value::Num(v)
+}
+
+NumericOnly: syn::NumVal<'input> = {
+    <v:I_or_F_const> => v,
+    "+" <v:I_or_F_const> => v,
+    "-" <v:I_or_F_const> => v.neg(),
+}
+
+I_or_F_const: syn::NumVal<'input> = {
+    <s:DECIMAL> => syn::NumVal::Float{neg: false, v: s},
+    <s:INTEGER> => {
+        if let Ok(v) = i32::from_str(s) {
+            syn::NumVal::Int(v)
+        } else {
+            syn::NumVal::Float{neg: false, v: s}
+        }
+    },
+}
+
+opt_boolean_or_string: syn::StrVal<'input> = {
+    TRUE_P => syn::StrVal::InPlace("true"),
+    FALSE_P => syn::StrVal::InPlace("false"),
+    <s:Sconst> => s,
+}
+
+Sconst: syn::StrVal<'input> = {
+    <s:XB> => {
+        syn::StrVal::InPlace(&s)
+    }
+}
+
+match {
+    // keywords
+    r"[gG][eE][tT]" => GET,
+    r"[sS][eE][tT]" => SET,
+    r"[tT][rR][uU][eE]" => TRUE_P,
+    r"[fF][aA][lL][sS][eE]" => FALSE_P,
+} else {
+    r"[0-9]*\.[0-9]+|[0-9]+\.[0-9]*" => DECIMAL,
+    r"[0-9]+" => INTEGER,
+} else {
+    r"[a-zA-Z0-9_]+" => XB,
+    _,
+}
